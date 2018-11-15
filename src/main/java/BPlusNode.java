@@ -35,9 +35,9 @@ public class BPlusNode {
         this.isLeaf = isLeaf;
         this.data = new LinkedList<BPlusData>();
         if (!isLeaf) {
-
             children = new LinkedList<BPlusNode>();
         }
+        filename = "data/" + UUID.randomUUID().toString() + ".ser";
     }
 
     public BPlusNode(boolean isLeaf, String filename, BPlusTree tree) {//throws IOException {
@@ -61,12 +61,6 @@ public class BPlusNode {
 
     public byte[] get(long key) {
         if (isLeaf) {
-//            int index = getDataIndexOfKey(key);
-//            if (index == -1) {
-//                return null;
-//            } else {
-//                return data.get(index).value;
-//            }
             try {
                 DatabaseSliceOuterClass.DatabaseSlice tempData = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(new FileInputStream(filename));
                 return tempData.getDataMap().get(key).toByteArray();
@@ -82,6 +76,40 @@ public class BPlusNode {
         } else {
             return children.get(childIndex).get(key);
         }
+    }
+
+    private BPlusData getOneByKey(long key) {
+        if (!isLeaf) {
+            return null;
+        }
+        return getOneByIndex(getDataIndexOfKey(key));
+    }
+
+
+    private BPlusData getOneByIndex(int index) {
+        if (!isLeaf) {
+            return null;
+        }
+        FileInputStream in = null;
+        DatabaseSliceOuterClass.DatabaseSlice slice = null;
+        BPlusData getData = data.get(index);
+        getData.value = null;
+        try {
+            in = new FileInputStream(filename);
+            slice = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
+            in.close();
+
+            if (slice.containsData(getData.key)) {
+                getData.value = slice.getDataOrThrow(getData.key).toByteArray();
+                return getData;
+            } else {
+                // throw new DBException("key "+bPlusData.key+" not exists.");
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        return null;
     }
 
     private int getDataIndexOfKey(long key) {
@@ -153,69 +181,149 @@ public class BPlusNode {
         }
     }
 
-    public byte[] removeReal(long key, BPlusTree tree) {
+    public byte[] removeReal(long key) {
         int removeIndex = getDataIndexOfKey(key);
         if (removeIndex == -1) {
             return null;
         }
-        byte[] value = null;
-        Map<Long, ByteString> map;
-        FileInputStream in;
-        FileOutputStream out;
-        try {
-            in = new FileInputStream(filename);
-            DatabaseSliceOuterClass.DatabaseSlice tempData = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
-            in.close();
+
+        return removeIndex(removeIndex).value;
+    }
+
+    private BPlusData removeIndex(int index) {
+        if (index >= 0 && index < data.size()) {
+            BPlusData bPlusData = data.get(index);
+            bPlusData.value = null;
+            Map<Long, ByteString> map;
+            FileInputStream in = null;
+            FileOutputStream out = null;
+            try {
+                in = new FileInputStream(filename);
+                DatabaseSliceOuterClass.DatabaseSlice tempData = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
+                in.close();
+
+                map = tempData.getDataMap();
+                if (map.containsKey(bPlusData.key)) {
+                    data.remove(index);
+                    bPlusData.value = map.remove(bPlusData.key).toByteArray();
 
 
-            map = tempData.getDataMap();
-            if (map.containsKey(key)) {
-                value = map.remove(key).toByteArray();
-                data.remove(removeIndex);
+                    // save
+                    out = new FileOutputStream(filename);
+                    tempData.writeTo(out);
+                    out.close();
+                } else {
 
-                // save
-                out = new FileOutputStream(filename);
-                tempData.writeTo(out);
-                out.close();
-
-                return value;
+                    // throw new DBException("key "+bPlusData.key+" not exists.");
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
             }
-
-
-        } catch (IOException e) {
-            e.printStackTrace();
+            return bPlusData;
         }
-
-
+        // throw
         return null;
     }
 
-    private BPlusData removeLastNode(BPlusTree tree) {
-        BPlusData result = data.get(data.size() - 1);
-        result.value = removeReal(result.key, tree);
-        return result;
 
+    private BPlusData removeLastNode() {
+        return removeIndex(data.size() - 1);
     }
+
+    private BPlusData removeFirstNode() {
+        return removeIndex(0);
+    }
+
 
     private void saveOne(long key, byte[] value) {
         Map<Long, ByteString> map;
         FileInputStream in;
         FileOutputStream out;
+        DatabaseSliceOuterClass.DatabaseSlice slice;
+        DatabaseSliceOuterClass.DatabaseSlice.Builder builder;
+        File file = new File(filename);
 
         try {
-            in = new FileInputStream(filename);
-            DatabaseSliceOuterClass.DatabaseSlice tempData = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
-            in.close();
+            if (data.size() == 0) {
+                builder = DatabaseSliceOuterClass.DatabaseSlice.newBuilder();
+            } else {
 
-            map = tempData.getDataMap();
-            map.put(key, ByteString.copyFrom(value));
+                in = new FileInputStream(filename);
+                slice = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
+                builder = slice.toBuilder();
+                in.close();
+
+            }
+            if (value == null) {
+                System.out.println("null");
+                ;
+            }
+            builder.putData(key, ByteString.copyFrom(value));
+            slice = builder.build();
 
             out = new FileOutputStream(filename);
-            tempData.writeTo(out);
+            slice.writeTo(out);
             out.close();
 
         } catch (IOException e) {
             e.printStackTrace();
+        }
+    }
+
+
+    private void saveOneIndexAndData(long key, byte[] value) {
+        FileInputStream in;
+        FileOutputStream out;
+        DatabaseSliceOuterClass.DatabaseSlice slice;
+        DatabaseSliceOuterClass.DatabaseSlice.Builder builder;
+        if (isLeaf) {
+            int updateIndex = getDataIndexOfKey(key);
+            if (updateIndex != -1) {
+                // update
+                try {
+                    in = new FileInputStream(filename);
+                    slice = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
+                    in.close();
+
+                    slice.getDataMap().put(key, ByteString.copyFrom(value));
+
+                    out = new FileOutputStream(filename);
+                    slice.writeTo(out);
+                    out.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            } else {
+                // insert
+                int insertIndex = getLeafInsertIndexOfKey(key);
+                try {
+                    if (data.size() == 0) {
+                        builder = DatabaseSliceOuterClass.DatabaseSlice.newBuilder();
+
+                    } else {
+
+                        in = new FileInputStream(filename);
+                        slice = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
+                        builder = slice.toBuilder();
+                        in.close();
+
+                    }
+                    builder.putData(key, ByteString.copyFrom(value));
+                    slice = builder.build();
+
+
+                    out = new FileOutputStream(filename);
+                    slice.writeTo(out);
+                    out.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+                if (insertIndex == -1) {
+                    System.out.println("error insert");
+                } else {
+                    data.add(insertIndex, new BPlusData(key, null));
+                }
+            }
         }
     }
 
@@ -227,61 +335,56 @@ public class BPlusNode {
             }
             // root, size can be fewer than order/2, just remove
             if (parent == null) {
-//                if (data.size() == 1) {
-//                    tree.height = 0;
-//                }
-                return removeReal(key, tree);
+                return removeReal(key);
             }
             // not root
             if (data.size() - 1 >= tree.order / 2) {
-                byte[] val = removeReal(key, tree);
+                byte[] val = removeReal(key);
                 return val;
 
             } else {
                 // borrow a (key, value) from other nodes
-
                 if (previous != null && previous.parent == parent && previous.data.size() - 1 >= tree.order / 2) {
 
                     // index and storage
-                    BPlusData tempData = previous.removeLastNode(tree);
+                    BPlusData tempData = previous.removeLastNode();
                     data.add(0, tempData);
                     saveOne(tempData.key, tempData.value);
+                    tempData.value = null;
 
-                    if (parent == null) {
-                        System.out.println("exception");
-
-                    }
-                    if (parent.children == null) {
-                        System.out.println("exception parent children");
-                    }
                     int changeIndex = parent.children.indexOf(this);
                     parent.data.get(changeIndex - 1).key = tempData.key;
 
-                    removeIndex = getDataIndexOfKey(key);
-                    return data.remove(removeIndex).value;
+                    return removeReal(key);
                 }
 
                 if (next != null && next.parent == parent && next.data.size() - 1 >= tree.order / 2) {
-                    BPlusData tempData = next.data.remove(0);
+                    BPlusData tempData = next.removeFirstNode();
                     data.add(tempData);
+                    saveOne(tempData.key, tempData.value);
+                    tempData.value = null;
 
                     int changeIndex = parent.children.indexOf(next);
                     parent.data.get(changeIndex - 1).key = next.data.get(0).key;
 
-                    removeIndex = getDataIndexOfKey(key);
-                    return data.remove(removeIndex).value;
-
+                    return removeReal(key);
                 }
 
                 // merge with other node
                 if (previous != null && previous.parent == parent) {
                     // merge with previous brother
+
                     byte[] val = null;
                     for (int i = 0; i < data.size(); i++) {
                         if (data.get(i).key == key) {
-                            val = data.get(i).value;
+//                            val = data.get(i).value;
+                            val = getOneByIndex(i).value;
                         } else {
-                            previous.data.add(data.get(i));
+//                            previous.data.add(data.get(i));
+                            BPlusData temp = getOneByIndex(i);
+                            previous.data.add(temp);
+                            previous.saveOne(temp.key, temp.value);
+                            temp.value = null;
                         }
                     }
                     // parent
@@ -298,6 +401,7 @@ public class BPlusNode {
                     parent.checkAfterRemove(tree);
 
                     data = null;
+                    // todo delete data file
                     previous = null;
                     next = null;
                     parent = null;
@@ -307,15 +411,18 @@ public class BPlusNode {
                 if (next != null && next.parent == parent) {
                     // merge with next brother
                     removeIndex = getDataIndexOfKey(key);
-                    byte[] val = data.remove(removeIndex).value;
+                    byte[] val = removeIndex(removeIndex).value;
 
                     for (int i = 0; i < next.data.size(); i++) {
                         data.add(next.data.get(i));
+                        BPlusData temp = next.getOneByIndex(i);
+                        saveOne(temp.key, temp.value);
                     }
 
                     int indexInParent = parent.children.indexOf(next);
                     parent.children.remove(next);
                     parent.data.remove(indexInParent - 1);
+                    // todo delete file
 
                     next.parent = null;
                     next.data = null;
@@ -489,31 +596,7 @@ public class BPlusNode {
     }
 
     private void leafInsertOrUpdate(long key, byte[] value) {
-        if (isLeaf) {
-            int updateIndex = getDataIndexOfKey(key);
-            if (updateIndex != -1) {
-                // update
-                data.get(updateIndex).value = value;
-            } else {
-                // insert
-
-                int insertIndex = getLeafInsertIndexOfKey(key);
-
-                // key should
-                // review
-                if (insertIndex == -1) {
-                    System.out.println("error insert");
-                    return;
-                }
-
-//                if (insertIndex != -1) {
-                data.add(insertIndex, new BPlusData(key, value));
-
-//                }
-
-
-            }
-        }
+        saveOneIndexAndData(key, value);
     }
 
     private void leafSplitAndInsert(long key, byte[] value, BPlusTree tree) {
@@ -539,7 +622,7 @@ public class BPlusNode {
         next = null; // going to remove this node
 
 
-        // size
+        // data and index
         int leftSize = tree.order / 2;
         boolean hasInsert = false;
         for (int i = 0; i < data.size(); i++) {
@@ -551,19 +634,22 @@ public class BPlusNode {
             }
 
             if (hasInsert) {
+                insertNode.saveOne(data.get(i).key, getOneByIndex(i).value);
                 insertNode.data.add(data.get(i));
-
             } else {
                 if (data.get(i).key > key) {
+                    insertNode.saveOne(data.get(i).key, getOneByIndex(i).value);
                     insertNode.data.add(new BPlusData(key, value));
                     hasInsert = true;
                     i--;
                 } else {
+                    insertNode.saveOne(data.get(i).key, getOneByIndex(i).value);
                     insertNode.data.add(data.get(i));
                 }
             }
         }
         if (!hasInsert) {
+            rightNode.saveOne(key, value);
             rightNode.data.add(new BPlusData(key, value));
         }
         data = null;
@@ -596,7 +682,6 @@ public class BPlusNode {
 
             tree.root = rootParent;
             tree.firstLeaf = leftNode;
-//            tree.height = 1;
         }
     }
 

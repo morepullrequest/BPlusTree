@@ -1,3 +1,4 @@
+import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -28,6 +29,8 @@ public class Database {
     public static final int FOUR_KB = 4096;
 
     public static void main(String[] args) {
+        File file = new File(Config.indexFilename);
+        file.deleteOnExit();
         Database db = new Database();
         Random random = new Random();
 
@@ -35,7 +38,13 @@ public class Database {
         Map<byte[], byte[]> m = new HashMap<byte[], byte[]>();
         for (int i = 0; i < 1000; i++) {
             long keyLong = random.nextLong();
+
             byte[] keyByte = Main.long2Bytes(keyLong);
+            if (i >= 490) {
+                System.out.println(i);
+//                tree.walk();
+            }
+
             ByteBuffer bf = ByteBuffer.allocate(FOUR_KB);
             for (int j = 0; j < FOUR_KB / 16; j++) {
                 bf.putLong(random.nextLong());
@@ -45,7 +54,6 @@ public class Database {
             m.put(keyByte, valueByte);
 
             db.write(keyByte, valueByte);
-
         }
         tree.save();
 

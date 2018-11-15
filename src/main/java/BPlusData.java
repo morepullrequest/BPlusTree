@@ -6,9 +6,6 @@ public class BPlusData {
 
     public byte[] value;
 
-    public String fileName;
-    // public Map<byte[],byte[]> filedata;
-
 
     public BPlusData(long key, byte[] value) {
         this.key = key;
