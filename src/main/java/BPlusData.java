@@ -1,8 +1,11 @@
-import java.util.Map;
+import com.google.gson.annotations.Expose;
 
 public class BPlusData {
+    @Expose
     public long key;
+
     public byte[] value;
+
     public String fileName;
     // public Map<byte[],byte[]> filedata;
 

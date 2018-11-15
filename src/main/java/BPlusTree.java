@@ -1,17 +1,63 @@
-import java.util.LinkedList;
-import java.util.List;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.annotations.Expose;
+import io.grpc.netty.shaded.io.netty.util.internal.StringUtil;
+
+import java.io.*;
+
 
 public class BPlusTree {
+    @Expose
     public int order;
-
-
+    @Expose
     public BPlusNode root;
+    public BPlusNode firstLeaf;
 
+    public String filename;
 
-    public BPlusNode firstLeaf; // 第一个叶子节点，
+    public BPlusTree(int order) {
+        if (order < 3) {
+            System.out.println("Order must be greater than 2");
+            System.exit(0);
+        }
+        this.order = order;
+        root = new BPlusNode(true);
+        firstLeaf = root;
+        filename = Config.indexDir + Config.seperator + System.currentTimeMillis() + ".json";
+    }
 
+    public static BPlusTree buildTreeFromJson(String path) throws IOException {
+        if (StringUtil.isNullOrEmpty(path)) {
+            throw new IOException("filename is null or empty");
+        } else {
+            BPlusTree tree = null;
+            File jf = new File(path);
+            if (!jf.exists()) {
+                tree = new BPlusTree(Config.order);
+                tree.filename = path;
+                tree.save();
+                return tree;
+            } else {
+                Gson gson = new GsonBuilder()
+                        .excludeFieldsWithoutExposeAnnotation()
+                        .setPrettyPrinting()
+                        .create();
 
-//    public int height = 0;
+                BufferedReader reader = new BufferedReader(new FileReader(path));
+                tree = gson.fromJson(reader, BPlusTree.class);
+                tree.filename = path;
+                tree.root.checkRelationship();
+
+                try {
+                    tree.firstLeaf = tree.root.buildLeavesChain();
+                } catch (Exception e) {
+                    e.printStackTrace();
+                    return null;
+                }
+                return tree;
+            }
+        }
+    }
 
 
     public byte[] get(long key) {
@@ -24,17 +70,6 @@ public class BPlusTree {
 
     public void insertOrUpdate(long key, byte[] value) {
         root.insertOrUpdate(key, value, this);
-    }
-
-    public BPlusTree(int order) {
-        if (order < 3) {
-            System.out.println("Order must be greater than 2");
-            System.exit(0);
-        }
-
-        this.order = order;
-        root = new BPlusNode(true);
-        firstLeaf = root;
     }
 
     public void walk() {
@@ -59,4 +94,31 @@ public class BPlusTree {
         }
     }
 
+    public void save() {
+        BufferedWriter writer = null;
+        File file = new File(filename);
+        try {
+
+            if (!file.exists()) {
+
+            }
+            writer = new BufferedWriter(new FileWriter(file));
+            Gson gson = new GsonBuilder()
+                    .excludeFieldsWithoutExposeAnnotation()
+                    .setPrettyPrinting()
+                    .create();
+            gson.toJson(this, this.getClass(), writer);
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            if (writer != null) {
+                try {
+                    writer.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+    }
 }

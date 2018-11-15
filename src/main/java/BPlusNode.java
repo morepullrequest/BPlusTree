@@ -1,36 +1,77 @@
-import java.util.HashMap;
+import com.google.gson.annotations.Expose;
+import com.google.protobuf.ByteString;
+import io.grpc.netty.shaded.io.netty.util.internal.StringUtil;
+
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
+import java.io.IOException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 // todo 分别派生 叶子节点 内部节点
 public class BPlusNode {
+    @Expose
     public boolean isLeaf;
 
     public BPlusNode parent; // root : parent is null
-    public BPlusNode previous; // 前一个节点 leaf
-    public BPlusNode next; // 后一个节点 leaf
 
+    public BPlusNode previous; // 前一个节点 leaf
+
+    public BPlusNode next; // 后一个节点 leaf
+    @Expose
     public List<BPlusData> data;
+    @Expose
     public List<BPlusNode> children;
+    @Expose
+    public String filename;
+    // proto
+    DatabaseSliceOuterClass.DatabaseSlice storage = null;
 
 
     public BPlusNode(boolean isLeaf) {
         this.isLeaf = isLeaf;
         this.data = new LinkedList<BPlusData>();
         if (!isLeaf) {
+
             children = new LinkedList<BPlusNode>();
         }
     }
 
+    public BPlusNode(boolean isLeaf, String filename, BPlusTree tree) {//throws IOException {
+        this.isLeaf = isLeaf;
+        this.data = new LinkedList<BPlusData>();
+        if (!isLeaf) {
+            children = new LinkedList<BPlusNode>();
+        } else {
+            if (StringUtil.isNullOrEmpty(filename)) { // todo 文件名校验 正则 uuid.ser
+//                throw new IOException("filename is nul or empty");
+                File dataDir = new File("data");
+                if (!dataDir.exists()) {
+                    dataDir.mkdir();
+                }
+
+                filename = "data/" + UUID.randomUUID().toString() + ".ser";
+                tree.save();
+            }
+        }
+    }
 
     public byte[] get(long key) {
         if (isLeaf) {
-            int index = getDataIndexOfKey(key);
-            if (index == -1) {
-                return null;
-            } else {
-                return data.get(index).value;
+//            int index = getDataIndexOfKey(key);
+//            if (index == -1) {
+//                return null;
+//            } else {
+//                return data.get(index).value;
+//            }
+            try {
+                DatabaseSliceOuterClass.DatabaseSlice tempData = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(new FileInputStream(filename));
+                return tempData.getDataMap().get(key).toByteArray();
+            } catch (IOException e) {
+                e.printStackTrace();
             }
         }
 
@@ -112,6 +153,72 @@ public class BPlusNode {
         }
     }
 
+    public byte[] removeReal(long key, BPlusTree tree) {
+        int removeIndex = getDataIndexOfKey(key);
+        if (removeIndex == -1) {
+            return null;
+        }
+        byte[] value = null;
+        Map<Long, ByteString> map;
+        FileInputStream in;
+        FileOutputStream out;
+        try {
+            in = new FileInputStream(filename);
+            DatabaseSliceOuterClass.DatabaseSlice tempData = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
+            in.close();
+
+
+            map = tempData.getDataMap();
+            if (map.containsKey(key)) {
+                value = map.remove(key).toByteArray();
+                data.remove(removeIndex);
+
+                // save
+                out = new FileOutputStream(filename);
+                tempData.writeTo(out);
+                out.close();
+
+                return value;
+            }
+
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+
+        return null;
+    }
+
+    private BPlusData removeLastNode(BPlusTree tree) {
+        BPlusData result = data.get(data.size() - 1);
+        result.value = removeReal(result.key, tree);
+        return result;
+
+    }
+
+    private void saveOne(long key, byte[] value) {
+        Map<Long, ByteString> map;
+        FileInputStream in;
+        FileOutputStream out;
+
+        try {
+            in = new FileInputStream(filename);
+            DatabaseSliceOuterClass.DatabaseSlice tempData = DatabaseSliceOuterClass.DatabaseSlice.parseFrom(in);
+            in.close();
+
+            map = tempData.getDataMap();
+            map.put(key, ByteString.copyFrom(value));
+
+            out = new FileOutputStream(filename);
+            tempData.writeTo(out);
+            out.close();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     public byte[] remove(long key, BPlusTree tree) {
         if (isLeaf) {
             int removeIndex = getDataIndexOfKey(key);
@@ -123,11 +230,11 @@ public class BPlusNode {
 //                if (data.size() == 1) {
 //                    tree.height = 0;
 //                }
-                return data.remove(removeIndex).value;
+                return removeReal(key, tree);
             }
             // not root
             if (data.size() - 1 >= tree.order / 2) {
-                byte[] val = data.remove(removeIndex).value;
+                byte[] val = removeReal(key, tree);
                 return val;
 
             } else {
@@ -135,14 +242,16 @@ public class BPlusNode {
 
                 if (previous != null && previous.parent == parent && previous.data.size() - 1 >= tree.order / 2) {
 
-                    BPlusData tempData = previous.data.remove(previous.data.size() - 1);
+                    // index and storage
+                    BPlusData tempData = previous.removeLastNode(tree);
                     data.add(0, tempData);
+                    saveOne(tempData.key, tempData.value);
 
-                    if(parent==null){
+                    if (parent == null) {
                         System.out.println("exception");
 
                     }
-                    if(parent.children==null){
+                    if (parent.children == null) {
                         System.out.println("exception parent children");
                     }
                     int changeIndex = parent.children.indexOf(this);
@@ -295,7 +404,7 @@ public class BPlusNode {
             borrow.parent = this;
 
             BPlusData newKeyInParentData = nextBrother.data.remove(0); //?
-            int nextBrotherDataIndexInParent = parent.children.indexOf(nextBrother)-1;
+            int nextBrotherDataIndexInParent = parent.children.indexOf(nextBrother) - 1;
             BPlusData oldKeyInParentData = parent.data.remove(nextBrotherDataIndexInParent);//?
             parent.data.add(nextBrotherDataIndexInParent, newKeyInParentData);
             this.data.add(oldKeyInParentData);
@@ -593,6 +702,68 @@ public class BPlusNode {
         }
     }
 
+    public void checkRelationship() {
+        if (!isLeaf) {
+            for (BPlusNode node : children) {
+                node.parent = this;
+                node.checkRelationship();
+            }
+        }
+    }
+
+    public BPlusNode getFirstLeaf() {
+        if (isLeaf) {
+            return this;
+        } else {
+            if (children.size() > 0) {
+                children.get(0).getFirstLeaf();
+            }
+        }
+        return null;
+    }
+
+    public BPlusNode getLastLeaf() {
+        if (isLeaf) {
+            return this;
+        } else {
+            if (children.size() > 0) {
+                return children.get(children.size() - 1).getLastLeaf();
+            }
+            return null;
+        }
+    }
+
+    public BPlusNode buildLeavesChain() throws Exception {
+
+        if (!isLeaf) {
+            if (children.size() > 0) {
+                BPlusNode pre = null;
+                BPlusNode head = null;
+                for (BPlusNode node : children) {
+                    BPlusNode now = node.buildLeavesChain();
+                    if (head != null) {
+                        pre.next = now;
+                        now.previous = pre;
+                    } else {
+                        head = now;
+                    }
+
+                    BPlusNode tail = now;
+                    while (tail.next != null) {
+                        tail = tail.next;
+                    }
+                    pre = tail;
+                }
+                return head;
+            } else {
+                throw new Exception("internal node has no child.");
+            }
+        } else {
+            this.previous = null;
+            this.next = null;
+            return this;
+        }
+    }
 }
 
 

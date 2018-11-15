@@ -1,5 +1,12 @@
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import java.io.File;
+import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.HashSet;
+import java.util.Random;
+import java.util.Set;
 
 public class Main {
     public static void main(String[] args) {
@@ -9,7 +16,15 @@ public class Main {
         // testLB();
 //        testRandomInsert(order, size);
 //        testBug(order, size);
-        randomTest(order);
+//        randomTest(order);
+
+        File file = new File("data/1.txt");
+        try {
+            file.createNewFile();
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 
     private static int eightBytes = 8;
@@ -33,6 +48,12 @@ public class Main {
             tree.insertOrUpdate((long) i, long2Bytes((long) i));
             tree.walk();
         }
+        Gson gson = new GsonBuilder()
+                .excludeFieldsWithoutExposeAnnotation()
+                .setPrettyPrinting()
+                .create();
+
+        gson.toJson(tree, System.out);
     }
 
     public static void testLB() {
