@@ -60,6 +60,10 @@ public class BPlusNode {
     }
 
     private int getLeafInsertIndexOfKey(long key) {
+        if (parent == null && data.size() == 0) {
+            return 0;
+        }
+
         if (key < data.get(0).key) {
             return 0;
         } else if (key > data.get(data.size() - 1).key) {
@@ -109,13 +113,12 @@ public class BPlusNode {
     }
 
     public byte[] remove(long key, BPlusTree tree) {
-        // todo remove and check
         if (isLeaf) {
             int removeIndex = getDataIndexOfKey(key);
             if (removeIndex == -1) {
                 return null;
             }
-            // root
+            // root, size can be fewer than order/2, just remove
             if (parent == null) {
 //                if (data.size() == 1) {
 //                    tree.height = 0;
@@ -124,8 +127,7 @@ public class BPlusNode {
             }
             // not root
             if (data.size() - 1 >= tree.order / 2) {
-
-                byte[] val = data.remove(removeIndex).value; // ??
+                byte[] val = data.remove(removeIndex).value;
                 return val;
 
             } else {
@@ -155,8 +157,9 @@ public class BPlusNode {
 
                 }
 
-                // 与其他node合并 todo
+                // merge with other node
                 if (previous != null && previous.parent == parent) {
+                    // merge with previous brother
                     byte[] val = null;
                     for (int i = 0; i < data.size(); i++) {
                         if (data.get(i).key == key) {
@@ -165,11 +168,12 @@ public class BPlusNode {
                             previous.data.add(data.get(i));
                         }
                     }
+                    // parent
                     int indexInParent = parent.children.indexOf(this);
                     parent.children.remove(this);
                     parent.data.remove(indexInParent - 1);
 
-
+                    // previous next
                     previous.next = next;
                     if (next != null) {
                         next.previous = previous;
@@ -185,6 +189,7 @@ public class BPlusNode {
                     return val;
                 }
                 if (next != null && next.parent == parent) {
+                    // merge with next brother
                     removeIndex = getDataIndexOfKey(key);
                     byte[] val = data.remove(removeIndex).value;
 
@@ -196,6 +201,9 @@ public class BPlusNode {
                     parent.children.remove(next);
                     parent.data.remove(indexInParent - 1);
 
+                    next.parent = null;
+                    next.data = null;
+                    next.previous = null;
                     next = next.next;
                     if (next != null) {
                         next.previous = this;
@@ -204,21 +212,134 @@ public class BPlusNode {
                     parent.checkAfterRemove(tree);
                     return val;
                 }
+
+                return null;
             }
+        } else {
+            // not leaf
+            int childIndex = getChildIndexMayContainKey(key);
+            if (childIndex == -1) {
+                System.out.println("no key" + key);
+                return null;
+            }
+
+            return children.get(childIndex).remove(key, tree);
+
         }
-        // not leaf todo
-        return null;
     }
 
     private void checkAfterRemove(BPlusTree tree) {
+        // internal node remove a child and a key, check if valid
+        if (data.size() >= tree.order / 2) {
+            // valid
+            return;
+        }
 
+        // data.size()< order / 2
+        if (parent == null) {
+            // root
+            if (data.size() >= 2) {
+                return;
+            }
+
+            // root and data.size == 1
+            // merge with child
+            BPlusNode newRoot = children.get(0);
+            tree.root = newRoot;
+            newRoot.parent = null;
+
+            data = null;
+            children = null;
+            return;
+        }
+
+        // parent != null
+        // get brothers
+        int indexInParentChildren = parent.children.indexOf(this);
+        BPlusNode previousBrother = null, nextBrother = null;
+        if (indexInParentChildren - 1 >= 0) {
+            previousBrother = parent.children.get(indexInParentChildren - 1);
+        }
+        if (indexInParentChildren + 1 < parent.children.size()) {
+            nextBrother = parent.children.get(indexInParentChildren + 1);
+        }
+
+        if (previousBrother != null && previousBrother.data.size() - 1 >= tree.order / 2) {
+            int borrowIndex = previousBrother.children.size() - 1;
+            BPlusNode borrow = previousBrother.children.remove(borrowIndex);
+            this.children.add(0, borrow);
+            borrow.parent = this;
+
+            BPlusData newKeyInParentData = previousBrother.data.remove(borrowIndex - 1);
+            BPlusData oldKeyInParentData = parent.data.remove(indexInParentChildren - 1);
+            parent.data.add(indexInParentChildren - 1, newKeyInParentData);
+            this.data.add(0, oldKeyInParentData);
+
+            return;
+        }
+
+        if (nextBrother != null && nextBrother.data.size() - 1 >= tree.order / 2) {
+
+            BPlusNode borrow = nextBrother.children.remove(0);
+            this.children.add(borrow);
+            borrow.parent = this;
+
+            BPlusData newKeyInParentData = nextBrother.data.remove(0);
+            BPlusData oldKeyInParentData = parent.data.remove(indexInParentChildren + 1);
+            parent.data.add(indexInParentChildren + 1, newKeyInParentData);
+            this.data.add(oldKeyInParentData);
+            return;
+        }
+
+        // merge with pre brother
+        if (previousBrother != null) {
+            // children
+            for (int i = 0; i < children.size(); i++) {
+                children.get(i).parent = previousBrother;
+                previousBrother.children.add(children.get(i));
+            }
+            children = null;
+
+            // data
+            BPlusData keyInParentData = parent.data.remove(indexInParentChildren - 1);
+            parent.children.remove(this);
+
+            previousBrother.data.add(keyInParentData);
+            for (int i = 0; i < data.size(); i++) {
+                previousBrother.data.add(data.get(i));
+            }
+            data = null;
+
+            parent.checkAfterRemove(tree);
+            parent = null;
+            return;
+        }
+        if (nextBrother != null) {
+            for (int i = 0; i < nextBrother.children.size(); i++) {
+                children.add(nextBrother.children.get(i));
+            }
+            nextBrother.children = null;
+
+            BPlusData keyInParentData = parent.data.remove(indexInParentChildren);
+            parent.children.remove(nextBrother);
+
+            data.add(keyInParentData);
+            for (int i = 0; i < nextBrother.data.size(); i++) {
+                data.add(nextBrother.data.get(i));
+            }
+            nextBrother.data = null;
+            nextBrother.parent = null;
+
+            parent.checkAfterRemove(tree);
+            return;
+        }
     }
 
     public void insertOrUpdate(long key, byte[] value, BPlusTree tree) {
 
         if (isLeaf) {
             // update or insert , no split
-            if (getDataIndexOfKey(key) != -1 || data.size() < tree.order - 1) { // todo - 1
+            if (getDataIndexOfKey(key) != -1 || data.size() + 1 < tree.order) {
                 leafInsertOrUpdate(key, value);
 
 //                if (tree.height == 0) { // ???
@@ -248,15 +369,16 @@ public class BPlusNode {
 
                 int insertIndex = getLeafInsertIndexOfKey(key);
 
-                // key should >= data[0].key
+                // key should
                 // review
-                if (insertIndex == 0 || insertIndex == -1) {
+                if (insertIndex == -1) {
                     System.out.println("error insert");
                     return;
                 }
 
 //                if (insertIndex != -1) {
                 data.add(insertIndex, new BPlusData(key, value));
+
 //                }
 
 
