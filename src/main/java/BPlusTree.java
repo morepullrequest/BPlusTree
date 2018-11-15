@@ -1,3 +1,6 @@
+import java.util.LinkedList;
+import java.util.List;
+
 public class BPlusTree {
     public int order;
 
@@ -16,7 +19,7 @@ public class BPlusTree {
     }
 
     public byte[] remove(long key) {
-        return root.remove(key,this);
+        return root.remove(key, this);
     }
 
     public void insertOrUpdate(long key, byte[] value) {
@@ -33,4 +36,27 @@ public class BPlusTree {
         root = new BPlusNode(true);
         firstLeaf = root;
     }
+
+    public void walk() {
+        if (root != null) {
+            int height = root.getTreeHeight();
+            System.out.println("===================================================================================");
+            System.out.println("order: " + order);
+            for (int i = 1; i <= height; i++) {
+                root.walk(i, 1);
+                System.out.println("");
+            }
+
+            System.out.println("leaf:");
+            BPlusNode node = firstLeaf;
+            while (node != null) {
+                for (BPlusData d : node.data) {
+                    System.out.print(d.key + " ");
+                }
+                node = node.next;
+            }
+            System.out.println("\n");
+        }
+    }
+
 }

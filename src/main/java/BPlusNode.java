@@ -138,6 +138,13 @@ public class BPlusNode {
                     BPlusData tempData = previous.data.remove(previous.data.size() - 1);
                     data.add(0, tempData);
 
+                    if(parent==null){
+                        System.out.println("exception");
+
+                    }
+                    if(parent.children==null){
+                        System.out.println("exception parent children");
+                    }
                     int changeIndex = parent.children.indexOf(this);
                     parent.data.get(changeIndex - 1).key = tempData.key;
 
@@ -208,8 +215,11 @@ public class BPlusNode {
                     if (next != null) {
                         next.previous = this;
                     }
-
+//                    System.out.println("before check");
+//                    tree.walk();
                     parent.checkAfterRemove(tree);
+//                    System.out.println("after check");
+//                    tree.walk();
                     return val;
                 }
 
@@ -238,7 +248,7 @@ public class BPlusNode {
         // data.size()< order / 2
         if (parent == null) {
             // root
-            if (data.size() >= 2) {
+            if (children.size() >= 2) {
                 return;
             }
 
@@ -284,9 +294,10 @@ public class BPlusNode {
             this.children.add(borrow);
             borrow.parent = this;
 
-            BPlusData newKeyInParentData = nextBrother.data.remove(0);
-            BPlusData oldKeyInParentData = parent.data.remove(indexInParentChildren + 1);
-            parent.data.add(indexInParentChildren + 1, newKeyInParentData);
+            BPlusData newKeyInParentData = nextBrother.data.remove(0); //?
+            int nextBrotherDataIndexInParent = parent.children.indexOf(nextBrother)-1;
+            BPlusData oldKeyInParentData = parent.data.remove(nextBrotherDataIndexInParent);//?
+            parent.data.add(nextBrotherDataIndexInParent, newKeyInParentData);
             this.data.add(oldKeyInParentData);
             return;
         }
@@ -301,6 +312,7 @@ public class BPlusNode {
             children = null;
 
             // data
+            indexInParentChildren = parent.children.indexOf(this);
             BPlusData keyInParentData = parent.data.remove(indexInParentChildren - 1);
             parent.children.remove(this);
 
@@ -310,12 +322,17 @@ public class BPlusNode {
             }
             data = null;
 
+//            System.out.println("before check");
+//            tree.walk();
             parent.checkAfterRemove(tree);
+//            System.out.println("after check");
+//            tree.walk();
             parent = null;
             return;
         }
         if (nextBrother != null) {
             for (int i = 0; i < nextBrother.children.size(); i++) {
+                nextBrother.children.get(i).parent = this;
                 children.add(nextBrother.children.get(i));
             }
             nextBrother.children = null;
@@ -330,7 +347,11 @@ public class BPlusNode {
             nextBrother.data = null;
             nextBrother.parent = null;
 
+//            System.out.println("before check");
+//            tree.walk();
             parent.checkAfterRemove(tree);
+//            System.out.println("after check");
+//            tree.walk();
             return;
         }
     }
@@ -531,6 +552,47 @@ public class BPlusNode {
         }
         // else valid
     }
+
+
+    public int getTreeHeight() {
+        if (isLeaf) {
+            return 1;
+        } else {
+            int childHeight = children.get(0).getTreeHeight();
+            // check
+            for (int i = 0; i < children.size(); i++) {
+                int tempHeight = children.get(i).getTreeHeight();
+                if (tempHeight != childHeight) {
+                    System.out.println("error...........children has different height");
+                }
+            }
+            return childHeight + 1;
+        }
+    }
+
+    public int getNodeDepth() {
+        if (parent == null) {
+            return 1;
+        } else {
+            return parent.getNodeDepth() + 1;
+        }
+    }
+
+    public void walk(int depth, int thisDepth) {
+        if (thisDepth == depth) {
+            System.out.print("(" + (isLeaf ? "L " : "I "));
+            for (BPlusData d : data) {
+                System.out.print(d.key + " ");
+            }
+            System.out.print(")");
+
+        } else {
+            for (BPlusNode child : children) {
+                child.walk(depth, thisDepth + 1);
+            }
+        }
+    }
+
 }
 
 
