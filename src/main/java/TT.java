@@ -1,6 +1,7 @@
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.io.IOException;
 import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
@@ -10,8 +11,10 @@ public class TT {
         int order = 50;
         int size = 1000;
 //        testInsert(order, size);
-        randomTest(order);
+//        randomTest(order);
 //        testBug(order, size);
+//        randomTest(order);
+        testLoadFromFile();
     }
 
     public static void testInsert(int order, int size) {
@@ -102,5 +105,17 @@ public class TT {
                     break;
             }
         }
+        tree.save();
+    }
+
+
+    public static void testLoadFromFile() {
+        Tree tree;
+        try {
+            tree = Tree.buildTreeFromJson(Config.indexFilename);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
     }
 }

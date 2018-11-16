@@ -9,8 +9,8 @@ import java.util.UUID;
 
 public class LeafNodeImpl extends LeafNode {
     public LeafNodeImpl() {
-        super();
         isLeaf = true;
+        keys = new LinkedList<Long>();
         filename = "data/" + UUID.randomUUID().toString() + ".ser";
     }
 

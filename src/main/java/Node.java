@@ -1,6 +1,5 @@
 import com.google.gson.annotations.Expose;
 
-import java.util.LinkedList;
 import java.util.List;
 
 abstract public class Node {
@@ -12,12 +11,17 @@ abstract public class Node {
     @Expose
     public List<Long> keys;
 
+    public Node() {
+    }
+
+    public Node(boolean isLeaf, InternalNode parent, List<Long> keys) {
+        this.isLeaf = isLeaf;
+        this.parent = parent;
+        this.keys = keys;
+    }
+
     abstract byte[] get(long key);
 
-    public Node() {
-        keys = new LinkedList<Long>();
-        parent = null;
-    }
 
     int getKeyIndexOf(long key) {
         int leftIndex = 0, rightIndex = keys.size() - 1, midIndex;

@@ -2,8 +2,8 @@ import java.util.LinkedList;
 
 public class InternalNodeImpl extends InternalNode {
     public InternalNodeImpl() {
-        super();
         isLeaf = false;
+        keys = new LinkedList<Long>();
         children = new LinkedList<Node>();
     }
 

@@ -1,5 +1,3 @@
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.annotations.Expose;
 import io.grpc.netty.shaded.io.netty.util.internal.StringUtil;
 
@@ -38,13 +36,10 @@ public class Tree {
                 tree.save();
                 return tree;
             } else {
-                Gson gson = new GsonBuilder()
-                        .excludeFieldsWithoutExposeAnnotation()
-                        .setPrettyPrinting()
-                        .create();
+
 
                 BufferedReader reader = new BufferedReader(new FileReader(path));
-                tree = gson.fromJson(reader, Tree.class);
+                tree = Util.gson.fromJson(reader, Tree.class);
                 tree.filename = path;
                 tree.root.checkRelationship();
 
@@ -96,12 +91,9 @@ public class Tree {
         BufferedWriter writer = null;
         try {
             writer = new BufferedWriter(new FileWriter(filename));
-            Gson gson = new GsonBuilder()
-                    .excludeFieldsWithoutExposeAnnotation()
-                    .setPrettyPrinting()
-                    .create();
-            gson.toJson(this, this.getClass(), writer);
 
+            Util.gson.toJson(this, this.getClass(), writer);
+            writer.close();
         } catch (IOException e) {
             e.printStackTrace();
         } finally {
