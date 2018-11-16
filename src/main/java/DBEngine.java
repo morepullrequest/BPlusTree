@@ -19,11 +19,11 @@ public class DBEngine {
     }
 
     public byte[] read(byte[] key) {
-        return tree.get(Main.bytes2Long(key));
+        return tree.get(Util.bytes2Long(key));
     }
 
     public void write(byte[] key, byte[] value) {
-        tree.insertOrUpdate(Main.bytes2Long(key), value);
+        tree.insertOrUpdate(Util.bytes2Long(key), value);
     }
 
     public static void main(String[] args) {
@@ -36,7 +36,7 @@ public class DBEngine {
         for (int i = 0; i < 1000; i++) {
             long keyLong = random.nextLong();
 
-            byte[] keyByte = Main.long2Bytes(keyLong);
+            byte[] keyByte = Util.long2Bytes(keyLong);
 
             ByteBuffer bf = ByteBuffer.allocate(Util.FOUR_KB);
             for (int j = 0; j < Util.FOUR_KB / 16; j++) {
