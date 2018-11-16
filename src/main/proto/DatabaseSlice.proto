@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message DatabaseSlice {
+    map<int64, bytes> data = 1;
+}
