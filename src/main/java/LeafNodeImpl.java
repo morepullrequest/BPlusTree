@@ -26,6 +26,7 @@ public class LeafNodeImpl extends LeafNode {
         // check
         checkAfterRemove(tree);
 
+        tree.save();
         return kv.value;
     }
 
@@ -34,6 +35,8 @@ public class LeafNodeImpl extends LeafNode {
         saveOne(key, value);
         // check
         checkAfterInsert(tree);
+
+        tree.save();
     }
 
     int getInsertIndexOf(long key) {
@@ -244,7 +247,7 @@ public class LeafNodeImpl extends LeafNode {
             tree.root = newRoot;
             tree.firstLeaf = leftNode;
         }
-
+        tree.save();
     }
 
 

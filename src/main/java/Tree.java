@@ -37,7 +37,6 @@ public class Tree {
                 return tree;
             } else {
 
-
                 BufferedReader reader = new BufferedReader(new FileReader(path));
                 tree = Util.gson.fromJson(reader, Tree.class);
                 tree.filename = path;
