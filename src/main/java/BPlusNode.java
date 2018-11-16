@@ -28,7 +28,7 @@ public class BPlusNode {
     @Expose
     public String filename;
     // proto
-    DatabaseSliceOuterClass.DatabaseSlice storage = null;
+//    DatabaseSliceOuterClass.DatabaseSlice storage = null;
 
 
     public BPlusNode(boolean isLeaf) {
@@ -634,7 +634,8 @@ public class BPlusNode {
             }
 
             if (hasInsert) {
-                insertNode.saveOne(data.get(i).key, getOneByIndex(i).value);
+                BPlusData temp = getOneByIndex(i);
+                insertNode.saveOne(data.get(i).key, temp.value);
                 insertNode.data.add(data.get(i));
             } else {
                 if (data.get(i).key > key) {
